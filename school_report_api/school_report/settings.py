@@ -1,20 +1,29 @@
-﻿"""
-Django settings for School Report Management System
-Production-ready with Railway support
 """
-from pathlib import Path
-from decouple import config
-from datetime import timedelta
-import dj_database_url
+Django settings for School Report Management System.
+Works locally (PostgreSQL via DB_* vars) and on Railway (DATABASE_URL).
+"""
 import os
+from datetime import timedelta
+from pathlib import Path
+
+import dj_database_url
+from decouple import config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-this-in-production-!@#$%^&*()')
 
+def csv(name, default=''):
+    return [v.strip() for v in config(name, default=default).split(',') if v.strip()]
+
+
+# ── Core ──────────────────────────────────────────────────────────────
+SECRET_KEY = config('SECRET_KEY', default='dev-only-insecure-key-change-me')
 DEBUG = config('DEBUG', default=False, cast=bool)
+ALLOWED_HOSTS = csv('ALLOWED_HOSTS', default='*')
+CSRF_TRUSTED_ORIGINS = csv('CSRF_TRUSTED_ORIGINS', default='https://*.up.railway.app')
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*').split(',')
+# Railway terminates HTTPS at its proxy
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -23,9 +32,11 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    # Third-party
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
+    # Local
     'core',
     'api',
 ]
@@ -62,12 +73,11 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'school_report.wsgi.application'
 
-DATABASE_URL = config('DATABASE_URL', default=None)
+# ── Database ──────────────────────────────────────────────────────────
+DATABASE_URL = config('DATABASE_URL', default='')
 
 if DATABASE_URL:
-    DATABASES = {
-        'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600)
-    }
+    DATABASES = {'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600)}
 else:
     DATABASES = {
         'default': {
@@ -94,12 +104,17 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
+# ── Static files (served by WhiteNoise) ───────────────────────────────
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
+}
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# ── Django REST Framework ─────────────────────────────────────────────
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -111,17 +126,14 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20,
 }
 
+# ── SimpleJWT ─────────────────────────────────────────────────────────
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=8),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
+    'ROTATE_REFRESH_TOKENS': False,
     'UPDATE_LAST_LOGIN': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
+# ── CORS (the API uses Bearer tokens, not cookies) ────────────────────
 CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOWED_ORIGINS = config(
-    'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:3000,http://127.0.0.1:3000'
-).split(',')
