@@ -1,5 +1,0 @@
-{
-  "deploy": {
-    "startCommand": "python manage.py migrate --noinput && gunicorn school_report.wsgi --log-file -"
-  }
-}
